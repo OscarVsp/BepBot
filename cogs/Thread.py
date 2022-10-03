@@ -25,12 +25,12 @@ class Thread(commands.Cog):
         try:
             with open("data/tags.json") as json_file:
                 self.tag_role_map: Dict[str, List[int]] = json.load(json_file)
-        except json.JSONDecodeError:
-            self.tag_role_map: Dict[str, List[int]] = {}
-            self.save_tag_role_map()
-        except FileNotFoundError:
-            self.tag_role_map: Dict[str, List[int]] = {}
-            self.save_tag_role_map()
+        except json.JSONDecodeError as ex:
+            logging.error(f"Unable to decode tags.json content.")
+            raise ex
+        except FileNotFoundError as ex:
+            logging.error(f"Unable to find tags.json file from data/tags.json")
+            raise ex
 
     ### Utility Functions ###
 
@@ -38,6 +38,7 @@ class Thread(commands.Cog):
         """Save the tag_role_map to the json file"""
         with open("cogs/Thread/tags.json", "w") as json_file:
             json.dump(self.tag_role_map, json_file, indent=4)
+        logging.trace(f"tags.json content saved")
 
     async def tag_from_name(self, guild: disnake.Guild, name: str) -> Optional[disnake.ForumTag]:
         """Retrieve ForumTag of the forum_channel from his name
@@ -60,7 +61,10 @@ class Thread(commands.Cog):
         if tag:
             return tag
         else:
-            raise ValueError(f"Unable to retrieve tag from {name=}")
+            logging.error(
+                f"Not able to retrieve tag with {name=} from forumchannel {(await guild.fetch_channel(self.forum_channel_id)).name}"
+            )
+            return None
 
     async def role_from_name(self, guild: disnake.Guild, name: str) -> Optional[disnake.Role]:
         """Retrieve role of a given guild from his name
@@ -81,7 +85,8 @@ class Thread(commands.Cog):
         if role:
             return role
         else:
-            raise ValueError(f"Unable to retrieve role from {name=}")
+            logging.error(f"Not able to retrieve role with {name=} from guild {guild.name}")
+            return None
 
     async def thread_from_name(self, guild: disnake.Guild, name: str) -> Optional[disnake.Thread]:
         """Retrieve thread of a given guild from his name
@@ -104,7 +109,8 @@ class Thread(commands.Cog):
         if thread:
             return thread
         else:
-            raise ValueError(f"Unable to retrieve thread from {name=}")
+            logging.error(f"Not able to retrieve thread with {name=} from forumchannel {forum.name}")
+            return None
 
     def thread_to_notif(self, thread: disnake.Thread) -> Tuple[disnake.Embed, disnake.ui.Button]:
         """Convert a thread into an embed and a button to be send together as notification
@@ -160,7 +166,26 @@ class Thread(commands.Cog):
 
         # Link the role to the tag (either add it to the existing list of role for this tag, or create a new list)
         _tag = await self.tag_from_name(inter.guild, tag)
+        if _tag == None:
+            await inter.edit_original_response(
+                embed=disnake.Embed(
+                    title="Tag introuvable",
+                    description=f"Erreur durant la recherche du tag **{tag}** !",
+                    color=disnake.Color.red(),
+                )
+            )
+            return
+
         _role = await self.role_from_name(inter.guild, role)
+        if _role == None:
+            await inter.edit_original_response(
+                embed=disnake.Embed(
+                    title="Role introuvable",
+                    description=f"Erreur durant la recherche du role **{role}** !",
+                    color=disnake.Color.red(),
+                )
+            )
+            return
 
         if str(_tag.id) in self.tag_role_map.keys():
             roles = self.tag_role_map.get(str(_tag.id))
@@ -172,8 +197,14 @@ class Thread(commands.Cog):
                 )
                 return
             roles.append(_role.id)
+            logging.trace(
+                f"[Cog.Thread] [link_add] Added role {_role:name}:{_role.id} to existing tag {_tag.name}:{_tag.id} roles list."
+            )
         else:
             self.tag_role_map.setdefault(str(_tag.id), [_role.id])
+            logging.trace(
+                f"[Cog.Thread] [link_add] Added role {_role:name}:{_role.id} to tag new {_tag.name}:{_tag.id} list."
+            )
         self.save_tag_role_map()
 
         # Send a confirmation message with all the roles linked to the tag
@@ -209,7 +240,26 @@ class Thread(commands.Cog):
 
         # Retrieve the tag and role selected
         _tag = await self.tag_from_name(inter.guild, tag)
+        if _tag == None:
+            await inter.edit_original_response(
+                embed=disnake.Embed(
+                    title="Tag introuvable",
+                    description=f"Erreur durant la recherche du tag **{tag}** !",
+                    color=disnake.Color.red(),
+                )
+            )
+            return
+
         _role = await self.role_from_name(inter.guild, role)
+        if _role == None:
+            await inter.edit_original_response(
+                embed=disnake.Embed(
+                    title="Role introuvable",
+                    description=f"Erreur durant la recherche du role **{role}** !",
+                    color=disnake.Color.red(),
+                )
+            )
+            return
 
         if str(_tag.id) not in self.tag_role_map.keys():
             raise KeyError(f"Tag {tag} is not in database")
@@ -252,6 +302,15 @@ class Thread(commands.Cog):
         await inter.response.defer(ephemeral=True)
 
         _tag = await self.tag_from_name(inter.guild, tag)
+        if _tag == None:
+            await inter.edit_original_response(
+                embed=disnake.Embed(
+                    title="Tag introuvable",
+                    description=f"Erreur durant la recherch du tag **{tag}** !",
+                    color=disnake.Color.red(),
+                )
+            )
+            return
         linked_roles: List[disnake.Role] = [inter.guild.get_role(id) for id in self.tag_role_map.get(str(_tag.id))]
 
         await inter.edit_original_message(
@@ -297,6 +356,15 @@ class Thread(commands.Cog):
         await inter.response.defer(ephemeral=True)
 
         _thread = await self.thread_from_name(inter.guild, thread)
+        if _thread == None:
+            await inter.edit_original_response(
+                embed=disnake.Embed(
+                    title="Thread introuvable",
+                    description=f"Erreur durant la recherche du thread **{thread}** !",
+                    color=disnake.Color.red(),
+                )
+            )
+            return
 
         # Check all the member that should be in the thread but aren't
         members_to_add: List[disnake.Member] = []
