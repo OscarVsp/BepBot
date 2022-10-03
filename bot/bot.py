@@ -21,6 +21,7 @@ import os
 import platform
 import traceback
 import tracemalloc
+from typing import List
 
 tracemalloc.start()
 
@@ -32,17 +33,18 @@ from disnake.ext.commands import InteractionBot
 class Bot(InteractionBot):
 
     BEP_image = "https://i.imgur.com/BHgic3o.png"
+    ULB_image = "https://i.imgur.com/0VLBhVJ.png"
 
     def __init__(self, logger, logFormatter):
         self.logger = logger
         self.logFormatter = logFormatter
-        self.test_mode = bool(os.getenv("TEST"))
-        self.start_succed: bool = True
-        intents = disnake.Intents.all()  # Allow the use of custom intents
+        self.test_mode = bool(os.getenv("TEST_GUILD"))
+        self.cog_not_loaded: List[str] = []
+        intents = disnake.Intents.all()
 
         if self.test_mode:
             logging.info("Starting in test mod...")
-            super().__init__(intents=intents, test_guilds=[int(os.getenv("BEP_SERVER"))])
+            super().__init__(intents=intents, test_guilds=[int(os.getenv("TEST_GUILD"))])
         else:
             logging.info("Starting in prod mod...")
             super().__init__(intents=intents)
@@ -63,7 +65,8 @@ class Bot(InteractionBot):
         The code in this even is executed when the bot is ready
         """
         self.log_channel = self.get_channel(int(os.getenv("LOG_CHANNEL")))
-        logging.info("-" * 50)
+        if not self.log_channel:
+            self.log_channel = self.owner.dm_channel
         logging.info("-" * 50)
         logging.info(f"| Logged in as {self.user.name}")
         logging.info(f"| disnake API version: {disnake.__version__}")
@@ -71,25 +74,28 @@ class Bot(InteractionBot):
         logging.info(f"| Running on: {platform.system()} {platform.release()} ({os.name})")
         logging.info(f"| Owner : {self.owner}")
         logging.info(f"| Cogs loaded : " + ", ".join([f"{cog}" for cog in self.cogs.keys()]))
-        logging.info("| Started successfully !" if self.start_succed else "| Started with some issues...")
-        logging.info(f"| Ready !")
+        if self.cog_not_loaded:
+            logging.info("| /!\ Cogs not loaded (see error above): " + ", ".join(self.cog_not_loaded))
+        logging.info(f"| Bot Ready !")
         logging.info("-" * 50)
 
     def load_commands(self) -> None:
         for extension in os.listdir(f"./cogs"):
-            if extension != ".gitignore":
+            if extension.endswith(".py"):
                 try:
-                    self.load_extension(f"cogs.{extension}.{extension}")
-                    logging.info(f"Loaded extension '{extension}'")
+                    self.load_extension(f"cogs.{extension[:-3]}")
+                    logging.info(f"Loaded extension '{extension[:-3]}'")
                 except Exception as e:
                     exception = f"{type(e).__name__}: {e}"
-                    logging.warning(f"Failed to load extension {extension}\n{exception}\n{self.tracebackEx(exception)}")
-                    self.start_succed = False
+                    logging.warning(
+                        f"Failed to load extension {extension[:-3]}: {exception}\n{self.tracebackEx(exception)}"
+                    )
+                    self.cog_not_loaded.append(extension)
 
     async def send_error_log(self, interaction: ApplicationCommandInteraction, error: Exception):
         tb = self.tracebackEx(error)
         logging.error(
-            f"{error} raised on command /{interaction.application_command.name} from {interaction.guild.name} #{interaction.channel.name} by {interaction.author.name}.\n{tb}"
+            f"{error} raised on command /{interaction.application_command.name} from {interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'} by {interaction.author.name}.\n{tb}"
         )
         await interaction.send(
             content=self.owner.mention,
@@ -103,7 +109,7 @@ class Bot(InteractionBot):
         await self.log_channel.send(
             embed=disnake.Embed(title=f":x: __** ERROR**__ :x:", description=f"```{error}```").add_field(
                 name=f"Raised on command :",
-                value=f"**/{interaction.application_command.name}:{interaction.id}** from {interaction.guild.name} #{interaction.channel.mention} by {interaction.author.mention} at {interaction.created_at} with options\n```{interaction.filled_options}```"
+                value=f"**/{interaction.application_command.name}:{interaction.id}** from {interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'} by {interaction.author.mention} at {interaction.created_at} with options\n```{interaction.filled_options}```"
                 + (f" and target\n``'{interaction.target}``'." if interaction.target else "."),
             )
         )
@@ -113,18 +119,18 @@ class Bot(InteractionBot):
         await self.log_channel.send(embed=disnake.Embed(description=f"```python\n{tb[4050*n:]}```"))
 
     async def on_slash_command(self, interaction: disnake.ApplicationCommandInteraction) -> None:
-        logging.info(
-            f"Slash command '{interaction.application_command.name}:{interaction.id}' from '{interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'}' by '{interaction.author.name}' started..."
+        logging.trace(
+            f"[Bot] Slash command '{interaction.application_command.name}:{interaction.id}' from '{interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'}' by '{interaction.author.name}' started..."
         )
 
     async def on_user_command(self, interaction: disnake.UserCommandInteraction) -> None:
-        logging.info(
-            f"User command '{interaction.application_command.name}:{interaction.id}' from '{interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'}' by '{interaction.author.name}' started..."
+        logging.trace(
+            f"[Bot] User command '{interaction.application_command.name}:{interaction.id}' from '{interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'}' by '{interaction.author.name}' started..."
         )
 
     async def on_message_command(self, interaction: disnake.MessageCommandInteraction) -> None:
-        logging.info(
-            f"Message command '{interaction.application_command.name}:{interaction.id}' from '{interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'}' by '{interaction.author.name}' started..."
+        logging.trace(
+            f"[Bot] Message command '{interaction.application_command.name}:{interaction.id}' from '{interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'}' by '{interaction.author.name}' started..."
         )
 
     async def on_slash_command_error(self, interaction: ApplicationCommandInteraction, error: Exception) -> None:
@@ -137,16 +143,16 @@ class Bot(InteractionBot):
         await self.send_error_log(interaction, error)
 
     async def on_slash_command_completion(self, interaction: disnake.ApplicationCommandInteraction) -> None:
-        logging.info(
-            f"Slash command '{interaction.application_command.name}:{interaction.id}' from '{interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'}' by '{interaction.author.name}' at '{interaction.created_at}' ended normally"
+        logging.trace(
+            f"[Bot] Slash command '{interaction.application_command.name}:{interaction.id}' from '{interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'}' by '{interaction.author.name}' at '{interaction.created_at}' ended normally"
         )
 
     async def on_user_command_completion(self, interaction: disnake.UserCommandInteraction) -> None:
-        logging.info(
-            f"User command '{interaction.application_command.name}:{interaction.id}' from '{interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'}' by '{interaction.author.name}' at '{interaction.created_at}' ended normally"
+        logging.trace(
+            f"[Bot] User command '{interaction.application_command.name}:{interaction.id}' from '{interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'}' by '{interaction.author.name}' at '{interaction.created_at}' ended normally"
         )
 
     async def on_message_command_completion(self, interaction: disnake.MessageCommandInteraction) -> None:
-        logging.info(
-            f"Message command '{interaction.application_command.name}:{interaction.id}' from '{interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'}' by '{interaction.author.name}' at '{interaction.created_at}' ended normally"
+        logging.trace(
+            f"[Bot] Message command '{interaction.application_command.name}:{interaction.id}' from '{interaction.guild.name+'#'+interaction.channel.name if interaction.guild else 'DM'}' by '{interaction.author.name}' at '{interaction.created_at}' ended normally"
         )

@@ -23,7 +23,7 @@ class Thread(commands.Cog):
         self.forum_channel_id: int = int(os.getenv("FORUM_CHANNEL"))
 
         try:
-            with open("cogs/Thread/tags.json") as json_file:
+            with open("data/tags.json") as json_file:
                 self.tag_role_map: Dict[str, List[int]] = json.load(json_file)
         except json.JSONDecodeError:
             self.tag_role_map: Dict[str, List[int]] = {}
