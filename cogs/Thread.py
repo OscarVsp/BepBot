@@ -36,7 +36,7 @@ class Thread(commands.Cog):
 
     def save_tag_role_map(self) -> None:
         """Save the tag_role_map to the json file"""
-        with open("cogs/Thread/tags.json", "w") as json_file:
+        with open("data/tags.json", "w") as json_file:
             json.dump(self.tag_role_map, json_file, indent=4)
         logging.trace(f"tags.json content saved")
 
@@ -198,12 +198,12 @@ class Thread(commands.Cog):
                 return
             roles.append(_role.id)
             logging.trace(
-                f"[Cog.Thread] [link_add] Added role {_role:name}:{_role.id} to existing tag {_tag.name}:{_tag.id} roles list."
+                f"[Cog.Thread] [link_add] Added role {_role.name}:{_role.id} to existing tag {_tag.name}:{_tag.id} roles list."
             )
         else:
             self.tag_role_map.setdefault(str(_tag.id), [_role.id])
             logging.trace(
-                f"[Cog.Thread] [link_add] Added role {_role:name}:{_role.id} to tag new {_tag.name}:{_tag.id} list."
+                f"[Cog.Thread] [link_add] Added role {_role.name}:{_role.id} to tag new {_tag.name}:{_tag.id} list."
             )
         self.save_tag_role_map()
 
@@ -413,63 +413,81 @@ class Thread(commands.Cog):
 
     @link_add.autocomplete("tag")
     async def link_add_tag_autocomplete(self, inter: ApplicationCommandInteraction, value: str):
-        return [
+        tags = [
             tag.name
             for tag in (await inter.guild.fetch_channel(self.forum_channel_id)).available_tags
             if tag.name.lower().startswith(value.lower())
         ]
+        if len(tags) > 25:
+            tags = tags[:25]
+        return tags
 
     @link_add.autocomplete("role")
     async def link_add_role_autocomplete(self, inter: ApplicationCommandInteraction, value: str):
         tag_name = inter.filled_options.get("tag", "")
         if tag_name == "":
-            return [inter.guild.roles]
+            roles = [inter.guild.roles]
         else:
             tag = await self.tag_from_name(inter.guild, tag_name)
             role_already_linked_ids = self.tag_role_map.get(str(tag.id), [])
-            return [
+            roles = [
                 role.name
                 for role in inter.guild.roles
                 if (role.id not in role_already_linked_ids and role.name.lower().startswith(value.lower()))
             ]
+        if len(roles) > 25:
+            roles = roles[:25]
+        return roles
 
     @link_remove.autocomplete("tag")
     async def tlink_remove_tag_autocomplete(self, inter: ApplicationCommandInteraction, value: str):
-        return [
+        tags = [
             tag.name
             for tag in (await inter.guild.fetch_channel(self.forum_channel_id)).available_tags
             if tag.name.lower().startswith(value.lower()) and str(tag.id) in self.tag_role_map.keys()
         ]
+        if len(tags) > 25:
+            tags = tags[:25]
+        return tags
 
     @link_remove.autocomplete("role")
     async def link_remove_role_autocomplete(self, inter: ApplicationCommandInteraction, value: str):
         tag_name = inter.filled_options.get("tag", "")
         if tag_name == "":
-            return [inter.guild.roles]
+            roles = [inter.guild.roles]
         else:
             tag = await self.tag_from_name(inter.guild, tag_name)
             role_already_linked_ids = self.tag_role_map.get(str(tag.id), [])
-            return [
+            roles = [
                 role.name
                 for role in inter.guild.roles
                 if (role.id in role_already_linked_ids and role.name.lower().startswith(value.lower()))
             ]
+        if len(roles) > 25:
+            roles = roles[:25]
+        return roles
 
     @link_view.autocomplete("tag")
     async def link_view_tag_autocomplete(self, inter: ApplicationCommandInteraction, value: str):
-        return [
+        tags = [
             tag.name
             for tag in (await inter.guild.fetch_channel(self.forum_channel_id)).available_tags
             if self.tag_role_map.get(str(tag.id)) and tag.name.lower().startswith(value.lower())
         ]
+        if len(tags) > 25:
+            tags = tags[:25]
+        return tags
 
     @thread_refresh.autocomplete("thread")
     async def thread_refresh_thread_autocomplete(self, inter: ApplicationCommandInteraction, value: str):
-        return [
+        threads = [
             thread.name
             for thread in (await inter.guild.fetch_channel(self.forum_channel_id)).threads
             if thread.name.lower().startswith(value.lower())
         ]
+        if len(threads) > 25:
+            threads = threads[:25]
+        return threads
 
     ### Event listeners ###
 
