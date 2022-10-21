@@ -113,3 +113,6 @@ if __name__ == "__main__":
     bot = Bot(logger=rootLogger, logFormatter=logFormatter)
 
     bot.run(os.getenv("DISCORD_TOKEN"))
+
+
+# TODO Vote view ("Pour","Contre", "Abstention" + "Reset") pour les reu hybride
